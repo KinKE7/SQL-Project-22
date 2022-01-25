@@ -2,9 +2,9 @@ import mysql.connector as sqltor
 import pickle as binwriter
 
 def locpwd(bool = False):                           #password storage for user's root login, stores password in assets\pwd.bin
-    f = open('pwd.bin','rb')
-    password = binwriter.load(f)                    #pickler for the binary file
-    f.close()
+    #f = open('pwd.bin','rb')
+    password = ('scamper@8',)                  #pickler for the binary file
+    #f.close()
     if password[0] == '' or bool:                   #prompts user to enter his root password, incase the password is incorrect or missing
         print("Your password for MySQL root is missing. Please type it in so that the application may access it without any hassles.")
         f = open('pwd.bin','wb')                    # Sujal : (might want a popup for the visual PyQt dialog)
@@ -131,7 +131,15 @@ def wanttoggle(cur,uname,condn = True,bookid = ''):
         else:
             return []
 
-
+def insertcomment(cur,bookid,condn = True,uname = '',comment = ''):
+    if condn:
+        cur.execute('update regdata set comment = "%s" where name = "%s" and book = "%s";'%(comment,uname,bookid))
+        cur.execute('commit;')
+    else:
+        cur.execute('select name,comment from regdata where book = %s'%(bookid))
+        D = cur.fetchall()
+        print(D)
+    
 def book_onclick(name,book,cur,case = 1,click = True):
     if case == 1:
         if click:
@@ -147,6 +155,7 @@ def eradicate():
     admin_cur = myc.connection()
     admin_cur.execute("use BookiPedia")
     admin_cur.execute("delete from regdata where readbook + likebook + wantbook = 0;")
+    admin_cur.execute('commit;')
 
 def getcount(xursor,book,case = 0):                   #get counts of liked/read/want to read and display them with the book
     pass                   

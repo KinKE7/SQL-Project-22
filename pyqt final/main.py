@@ -114,7 +114,7 @@ class MainScreen(QDialog):
     def gotouserlists(num):  # Function to redirect users to My read/Favourites/Read list tab
         items = []
         QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
-        user_lists = [fav_list, my_read_list, read_list]
+        user_lists = [bgfns.liketoggle(cur1,username,False), bgfns.readtoggle(cur1,username,False), bgfns.readtoggle(cur1,username,False)]
         for book_id in user_lists[num]:
             resp = requests.get(f"https://www.googleapis.com/books/v1/volumes/{book_id}").json()
             items = items + [resp]
@@ -128,7 +128,7 @@ class SearchScreen(QDialog):
     def __init__(self, response, search, list_num=0):
         global thumbnail_list, title_list, authors_list, publisher_list, desc_list, lang_list, book_id_list
         super(SearchScreen, self).__init__()
-        user_lists = [fav_list, my_read_list, read_list]
+        user_lists = [bgfns.liketoggle(cur1,username,False), bgfns.readtoggle(cur1,username,False), bgfns.readtoggle(cur1,username,False)]
         if search:
             loadUi('search-screen.ui', self)
             self.search_line_edit.setText(searchterm)
@@ -246,7 +246,7 @@ class SearchScreen(QDialog):
     def gotouserlists(num):
         items = []
         QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
-        user_lists = [fav_list, my_read_list, read_list]
+        user_lists = [bgfns.liketoggle(cur1,username,False), bgfns.readtoggle(cur1,username,False), bgfns.readtoggle(cur1,username,False)]
         for book_id in user_lists[num]:
             resp = requests.get(f"https://www.googleapis.com/books/v1/volumes/{book_id}").json()
             items = items + [resp]
@@ -256,7 +256,7 @@ class SearchScreen(QDialog):
         widget.setCurrentIndex(widget.currentIndex() + 1)
 
 
-class ButtonRedirect(QDialog):
+class ButtonRedirect(QDialog):#TODO: get temp book inserted
     def __init__(self, button_num):
         super(ButtonRedirect, self).__init__()
         loadUi('expanded-book.ui', self)
@@ -289,8 +289,7 @@ class ButtonRedirect(QDialog):
         # Comments
         self.Comment_as_label.setText(f'Comment as {username}')
         try:  # Checks if comments for particular book exist else goes to except
-            # TODO: Get comments from database instead of dictionary and store it in var comments_list
-            comments_list = comments_dict[book_id_list[button_num]]
+            comments_list = bgfns.insertcomment(cur1,book_id_list[button_num],False)
             self.scrollAreaWidgetContents.setGeometry(QtCore.QRect(0, 0, 1198, 1100 + (170 * len(comments_list))))
             self.bgwidget.setGeometry(QtCore.QRect(0, 0, 1198, 1100 + (170 * len(comments_list))))
             for i in range(len(comments_list)):
@@ -368,11 +367,11 @@ class ButtonRedirect(QDialog):
                                'color: rgb(255, 255, 255);' \
                                'border: 1px solid rgb(238, 2, 73);' \
                                'background-color: rgb(238, 2, 73);'
-        if book_id_list[button_num] in fav_list:
+        if book_id_list[button_num] in bgfns.liketoggle(cur1,username,False):
             self.fav_button.setStyleSheet(button_clicked_style)
-        if book_id_list[button_num] in my_read_list:
+        if book_id_list[button_num] in bgfns.readtoggle(cur1,username,False):
             self.my_read_button.setStyleSheet(button_clicked_style)
-        if book_id_list[button_num] in read_list:
+        if book_id_list[button_num] in bgfns.readtoggle(cur1,username,False):
             self.read_list_button.setStyleSheet(button_clicked_style)
         # Menu
         self.menu_home.clicked.connect(self.gotomenu)
@@ -398,19 +397,15 @@ class ButtonRedirect(QDialog):
         widget.removeWidget(widget.currentWidget())
 
     def edit_fav_list(self, num):
-        global fav_list
-        #fav_list = bgfns.favtoggle(cur1,<username>,False)                      TODO
-        if book_id_list[num] in fav_list:  # Check if book is in fav_list
-            # TODO: If book is in fav_list and you click the button again, then obviously you remove the book from the database
-            '''fav_list = [book_id for book_id in fav_list if book_id != book_id_list[num]]'''
+        if book_id_list[num] in bgfns.liketoggle(cur1,username,False):  # Check if book is in fav_list
+            bgfns.liketoggle(cur1,username,True,book_id_list[num])
             
             self.fav_button.setStyleSheet('border-radius: 5px;'
                                           'font: 14pt "MS Shell Dlg 2";'
                                           'color: rgb(255, 255, 255);'
                                           'border: 1px solid rgb(238, 2, 73);')
         else:
-            # TODO: If book isn't in fav_list, add it to database
-            fav_list = fav_list + [book_id_list[num]]
+            bgfns.liketoggle(cur1,username,True,book_id_list[num])
             self.fav_button.setStyleSheet('border-radius: 5px;'
                                           'font: 14pt "MS Shell Dlg 2";'
                                           'color: rgb(255, 255, 255);'
@@ -418,18 +413,14 @@ class ButtonRedirect(QDialog):
                                           'background-color: rgb(238, 2, 73);')
 
     def edit_my_read_list(self, num):
-        global my_read_list
-        #my_read_list = bgfns.wanttoggle(cur1,<username>,False)                      TODO
-        if book_id_list[num] in my_read_list:
-            # TODO: If book is in my_read_list and you click the button again, then obviously you remove the book from the database
-            my_read_list = [book_id for book_id in my_read_list if book_id != book_id_list[num]]
+        if book_id_list[num] in bgfns.wanttoggle(cur1,username,False):
+            bgfns.readtoggle(cur1,username,True,book_id_list[num])
             self.my_read_button.setStyleSheet('border-radius: 5px;'
                                               'font: 14pt "MS Shell Dlg 2";'
                                               'color: rgb(255, 255, 255);'
                                               'border: 1px solid rgb(238, 2, 73);')
         else:
-            # TODO: If book isn't in my_read_list, add it to database
-            my_read_list = my_read_list + [book_id_list[num]]
+            bgfns.readtoggle(cur1,username,True,book_id_list[num])
             self.my_read_button.setStyleSheet('border-radius: 5px;'
                                               'font: 14pt "MS Shell Dlg 2";'
                                               'color: rgb(255, 255, 255);'
@@ -437,18 +428,14 @@ class ButtonRedirect(QDialog):
                                               'background-color: rgb(238, 2, 73);')
 
     def edit_read_list(self, num):
-        global read_list
-        #read_list = bgfns.readtoggle(cur1,<username>,False)                      TODO
-        if book_id_list[num] in read_list:
-            # TODO: If book is in read_list and you click the button again, then obviously you remove the book from the database
-            read_list = [book_id for book_id in read_list if book_id != book_id_list[num]]
+        if book_id_list[num] in bgfns.readtoggle(cur1,username,False):
+            bgfns.wanttoggle(cur1,username,True,book_id_list[num])
             self.read_list_button.setStyleSheet('border-radius: 5px;'
                                                 'font: 14pt "MS Shell Dlg 2";'
                                                 'color: rgb(255, 255, 255);'
                                                 'border: 1px solid rgb(238, 2, 73);')
         else:
-            # TODO: If book isn't in read_list, add it to database
-            read_list = read_list + [book_id_list[num]]
+            bgfns.wanttoggle(cur1,username,True,book_id_list[num])
             self.read_list_button.setStyleSheet('border-radius: 5px;'
                                                 'font: 14pt "MS Shell Dlg 2";'
                                                 'color: rgb(255, 255, 255);'
@@ -459,7 +446,7 @@ class ButtonRedirect(QDialog):
     def gotouserlists(num):
         items = []
         QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
-        user_lists = [fav_list, my_read_list, read_list]
+        user_lists = [bgfns.liketoggle(cur1,username,False), bgfns.readtoggle(cur1,username,False), bgfns.readtoggle(cur1,username,False)]
         for book_id in user_lists[num]:
             resp = requests.get(f"https://www.googleapis.com/books/v1/volumes/{book_id}").json()
             items = items + [resp]
@@ -470,20 +457,14 @@ class ButtonRedirect(QDialog):
 
     def add_comment(self, num):
         comment = self.comment_input_text_edit.toPlainText()  # Gets comment from user and stores it into the 'comment' var
-        try:  # 'book_id_list[num]' is nothing but the book id. 'comments_dict[book_id_list[num]]' checks if there exists existing comments in that particular book. So if no comments exist in that particular book, next statement will raise an error and will go to the except statement.
-            # TODO: Instead of storing comments in dictionaries, store it in database.
-            comments_dict[book_id_list[num]] = comments_dict[book_id_list[num]] + [(username, comment)]
-        except:  # So if no comments are present in that book, this block creates a new key-value pair in dict 'comments_dict. But we'll store data in SQL instead of dict so just replace.
-            # TODO: Instead of storing comments in dictionaries, store it in database.
-            comments_dict[book_id_list[num]] = [(username, comment)]
+        bgfns.insertcomment(cur1,book_id_list[num],True,username,comment)
         widget.addWidget(ButtonRedirect(num))
         widget.setCurrentIndex(widget.currentIndex() + 1)
 
 
-# TODO: In the end, simply search for fav_list, my_read_list, comments_dict in this program and replace it with data from SQL.
 # main
 # replace fav_list, book_id_list, my_read_list, read_list, comments_dict, credentials
-thumbnail_list = title_list = authors_list = publisher_list = desc_list = lang_list = fav_list = book_id_list = my_read_list = read_list = []
+thumbnail_list = title_list = authors_list = publisher_list = desc_list = lang_list  = book_id_list = []
 comments_dict = {'id': [('Name', 'Comment')]}
 admin_list = ['root']
 username = searchterm = ''
@@ -499,3 +480,4 @@ if __name__ == '__main__':
         sys.exit(app.exec_())
     except:
         print('Exiting')
+        bgfns.eradicate()
