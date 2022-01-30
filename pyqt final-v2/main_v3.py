@@ -6,7 +6,7 @@ from PyQt5.QtGui import QCursor
 import requests
 import socket
 import requests.packages.urllib3.util.connection as urllib3_cn
-from iso639 import languages
+'''from iso639 import languages'''
 from functools import partial
 import backend_functions as bgfns
 from itertools import groupby
@@ -71,9 +71,8 @@ class LoginScreen(QDialog):
             self.error_label.setText('Please input all fields')
         else:
             userdata = bgfns.login(cur1, username)
-            matched_password = userdata[
-                1]  # Searches for username in SQL. If it doesn't exist then it goes to the except statement, if it does exist then matched password will become required password.
-            if matched_password == password:  # Verifies if required password (i.e, matched_password) matches with the password entered by user
+            matched_password = userdata[1]  # Searches for username in SQL. If it doesn't exist then it goes to the except statement, if it does exist then matched password will become required password.
+            if matched_password == password and not userdata[2]:  # Verifies if required password (i.e, matched_password) matches with the password entered by user
                 print('Successfully logged in')
                 main_screen = MainScreen()
                 widget.addWidget(main_screen)
@@ -162,7 +161,7 @@ class UserManagement(QDialog):
         super(UserManagement, self).__init__()
         loadUi('user-management.ui', self)
         # TODO: Get users_list from database, return True if user is banned
-        users_list = [('Abc', False), ('Abc', True), ('Abc', False), ('Abc', False), ('Abc', True), ('Abc', False)]
+        users_list = bgfns.banlist(cur1)
         users_list.sort(key=lambda x: x[1])  # First unbanned users and then banned
         i = 0
         for user in users_list:
@@ -210,12 +209,11 @@ class UserManagement(QDialog):
         if 'ban' in self.sender().objectName():
             user = self.sender().objectName().split('_', 1)
             if 'unban' in user[0]:
-                # unban user[1]
-                pass
+                #TODO unban user[1]
+                bgfns.ban(user[1],cur1,0)
             else:
-                # ban user[1]
-                pass
-
+                #TODO ban user[1]
+                bgfns.ban(user[1],cur1,1)
 
 class SearchScreen(QDialog):
     def __init__(self, response, search, list_num=0):
@@ -249,7 +247,7 @@ class SearchScreen(QDialog):
                 thumbnail = book_info['volumeInfo']['imageLinks']['thumbnail']
                 authors = ', '.join(book_info['volumeInfo']['authors'])
                 desc = book_info['volumeInfo']['description']
-                lang = languages.get(alpha2=book_info['volumeInfo']['language']).name
+                lang = 'English'#languages.get(alpha2=book_info['volumeInfo']['language']).name
             except:
                 continue
             try:
@@ -328,6 +326,7 @@ class SearchScreen(QDialog):
             button_redirect = ButtonRedirect(int((self.sender().objectName())[12:]) - 1)
             widget.addWidget(button_redirect)
             widget.setCurrentIndex(widget.currentIndex() + 1)
+            bgfns.book_onclick(username,book_id_list[int((self.sender().objectName())[12:]) - 1],cur1)
         except:
             pass
 
@@ -379,10 +378,9 @@ class ButtonRedirect(QDialog):  # TODO: get temp book inserted
         # Comments
         self.Comment_as_label.setText(f'Comment as {username}')
         try:  # Checks if comments for particular book exist else goes to except
-            comments_list = bgfns.insertcomment(cur1, book_id_list[button_num], False)
-            self.scrollAreaWidgetContents.setGeometry(QtCore.QRect(0, 0, 1198, 1100 + (170 * len(comments_list))))
-            self.bgwidget.setGeometry(QtCore.QRect(0, 0, 1198, 1100 + (170 * len(comments_list))))
-            for i in range(len(comments_list)):
+            self.scrollAreaWidgetContents.setGeometry(QtCore.QRect(0, 0, 1198, 1100 + (170 * len(bgfns.insertcomment(cur1, book_id_list[button_num], False)))))
+            self.bgwidget.setGeometry(QtCore.QRect(0, 0, 1198, 1100 + (170 * len(bgfns.insertcomment(cur1, book_id_list[button_num], False)))))
+            for i in range(len(bgfns.insertcomment(cur1, book_id_list[button_num], False))):
                 self.comment = QtWidgets.QPlainTextEdit(self.bgwidget)
                 self.comment.setGeometry(QtCore.QRect(170, 1140 + (150 * i), 931, 91))
                 self.comment.setStyleSheet("background-color: #00000000;\n"
@@ -401,9 +399,9 @@ class ButtonRedirect(QDialog):  # TODO: get temp book inserted
                 self.username.setStyleSheet("color: rgb(238, 2, 73);\n"
                                             "font: 10pt \"MS Shell Dlg 2\";")
                 self.username.setObjectName(f"username_{i + 1}")
-                self.comment.setPlainText(_translate("Dialog", comments_list[i][1]))
-                self.username.setText(_translate("Dialog", comments_list[i][0]))
-                if username in admin_list or username == comments_list[i][0]:
+                self.comment.setPlainText(_translate("Dialog", bgfns.insertcomment(cur1, book_id_list[button_num], False)[i][1]))
+                self.username.setText(_translate("Dialog", bgfns.insertcomment(cur1, book_id_list[button_num], False)[i][0]))
+                if username in admin_list or username == bgfns.insertcomment(cur1, book_id_list[button_num], False)[i][0]:
                     self.remove_icon = QtWidgets.QLabel(self.bgwidget)
                     self.remove_icon.setGeometry(QtCore.QRect(740, 1110 + (150 * i), 20, 20))
                     self.remove_icon.setText("")
@@ -547,13 +545,13 @@ class ButtonRedirect(QDialog):  # TODO: get temp book inserted
         button = ["".join(x) for _, x in groupby(self.sender().objectName(), key=str.isdigit)]
         # button = ['ban_button_', '1'] or ['remove_button_', '1']
         if 'remove_button_' in button:
-            comments_list = bgfns.insertcomment(cur1, book_id_list[button_num], False)
+            bgfns.insertcomment(cur1, book_id_list[button_num],True,username,'')
             # Remove comment comments_list[int(button[1])]
-            print(comments_list)
         elif 'ban_button_' in button:
-            comments_list = bgfns.insertcomment(cur1, book_id_list[button_num], False)
-            # Ban user comments_list[int(button[1])][0]
-            print(comments_list)
+            '''comments_list = bgfns.insertcomment(cur1, book_id_list[button_num],username,'')'''
+            #TODO Ban user where name = comments_list[int(button[1])][0]
+            #banuser(username)
+            #print(comments_list)
         try:
             button_redirect = ButtonRedirect(int((self.sender().objectName())[12:]) - 1)
             widget.addWidget(button_redirect)

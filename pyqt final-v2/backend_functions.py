@@ -45,8 +45,7 @@ def connection():
 
 
 def create_profile(uname, pwd, xursor):  # xursor : connection object init from main.py
-    xursor.execute("use BookiPedia")
-    xursor.execute('insert into registry VALUES("%s","%s");' % (uname, pwd))
+    xursor.execute('insert into registry VALUES("%s","%s",0);'%(uname, pwd))
     xursor.execute("commit;")
 
 
@@ -74,6 +73,8 @@ def login(xursor, uname):
     xursor.execute('select * from registry where name = "%s";' % (
         uname))  # might have to change the database name later to a password manager later
     u_query = xursor.fetchone()  # gives tuple : [0] = name, [1] = password , if not found returns NoneType
+    if u_query == None:
+        return ['','']
     return u_query
 
 
@@ -164,28 +165,46 @@ def insertcomment(cur, bookid, condn=True, uname='', comment=''):
         cur.execute('update regdata set comments = "%s" where name = "%s" and book = "%s";' % (comment, uname, bookid))
         cur.execute('commit;')
     else:
-        cur.execute('select name,comments from regdata where book = %s' % bookid)
+        cur.execute('select name,comments from regdata where book = "%s"' % bookid)
         d = cur.fetchall()
-        print(d)
+        q = []
+        for i in d:
+            if bool(i[1]):
+                q += [i]       
+        return q
 
 
-def book_onclick(name, book, cur, case=1, click=True):
-    if case == 1:
-        if click:
-            cur.execute('select likebook from regdata where name = "%s" and book = "%s";' % (name, book))
-            lb = bool(cur.fetchone()[0])
-            cur.execute('update regdata SET likebook = %s where name = "%s" and book="%s";' % (int(not lb), name, book))
-            cur.execute('commit;')
+def book_onclick(name, book, cur):
+    cur.execute("select name,book from regdata where name = '%s' and book = '%s';"%(name,book))
+    G = cur.fetchone()
+    if G == None:
+        cur.execute("insert  into regdata values('%s','%s',0,0,0,'');"%(name,book))
+        cur.execute('commit;')
 
+#TODO BANLIST RETURN T RUE LINE 164
+#TODO LINE 207,213,216
+def banlist(cur):
+    cur.execute("select name,bancheck from registry;")
+    D = cur.fetchall()
+    for i in range(len(D)):
+        if D[i][1] == 0:
+            D[i] = (D[i][0],False)
+        else:
+            D[i] = (D[i][0],True)
+    return D
 
-# ------------------------------------------------------------------------------------------------------------------------------
+    
+def ban(uname,cur,banbool = 1):
+    cur.execute("update registry set bancheck = %s where name = '%s';"%(banbool,uname))
+    cur.execute('commit;')
+#------------------------------------------------------------------------------------------------------------------------------
 # at end of every session, remove all books which are still not favourited/read/want to read... those books will not exist for the user's sql table
 # ------------------------------------------------------------------------------------------------------------------------------
 def eradicate():
     myc = connection()
     admin_cur = myc.cursor()
     admin_cur.execute("use BookiPedia")
-    admin_cur.execute("delete from regdata where readbook + likebook + wantbook = 0;")
+    admin_cur.execute("delete from regdata where readbook + likebook + wantbook = 0 and comment = '';")
     admin_cur.execute('commit;')
 
 
