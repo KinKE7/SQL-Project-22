@@ -467,8 +467,8 @@ class ButtonRedirect(QDialog):
         self.book_author.setText(_translate("Dialog", "Author: " + authors_list[button_num]))
         self.book_language.setText(_translate("Dialog", "Language: " + lang_list[button_num]))
         self.fav_button.setText(_translate("Dialog", "Add to Favourites"))
-        self.my_read_button.setText(_translate("Dialog", "Add to My Read"))
-        self.read_list_button.setText(_translate("Dialog", "Add to Read List"))
+        self.my_read_button.setText(_translate("Dialog", "Add to Read books"))
+        self.read_list_button.setText(_translate("Dialog", "Add to Read later"))
         # Button highlight
         button_clicked_style = 'border-radius: 5px;' \
                                'font: 14pt "MS Shell Dlg 2";' \
@@ -503,7 +503,6 @@ class ButtonRedirect(QDialog):
                                           'font: 14pt "MS Shell Dlg 2";'
                                           'color: rgb(255, 255, 255);'
                                           'border: 1px solid rgb(238, 2, 73);')
-            logging.info(f"Book '{title_list[num]}' removed from favourites")
         else:
             bgfns.liketoggle(cur1, username, True, book_id_list[num])
             self.fav_button.setStyleSheet('border-radius: 5px;'
@@ -511,7 +510,6 @@ class ButtonRedirect(QDialog):
                                           'color: rgb(255, 255, 255);'
                                           'border: 1px solid rgb(238, 2, 73);'
                                           'background-color: rgb(238, 2, 73);')
-            logging.info(f"Book '{title_list[num]}' added to favourites")
 
     def edit_read_list(self, num):
         if book_id_list[num] in bgfns.wanttoggle(cur1, username, False):
