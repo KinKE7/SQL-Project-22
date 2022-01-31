@@ -242,11 +242,11 @@ class SearchScreen(QDialog):
             loadUi('assets/ui/user-list-screen.ui', self)
             iter_no = len(user_lists[list_num])
             if list_num == 1:
-                self.title_label.setText('My Read')
-                self.setWindowTitle('My Read')
+                self.title_label.setText('Read books')
+                self.setWindowTitle('Read books')
             elif list_num == 2:
-                self.title_label.setText('Read List')
-                self.setWindowTitle('Read List')
+                self.title_label.setText('Read Later')
+                self.setWindowTitle('Read Later')
         j = 0
         thumbnail_list = title_list = authors_list = publisher_list = desc_list = lang_list = book_id_list = []
         for i in range(iter_no):
@@ -303,8 +303,7 @@ class SearchScreen(QDialog):
 
         if not title_list:
             self.error_label = QtWidgets.QLabel(self.bgwidget)
-            self.error_label.setGeometry(QtCore.QRect(0, 320, 1171, 131))
-            self.error_label.setAlignment(QtCore.Qt.AlignCenter)
+            self.error_label.setGeometry(QtCore.QRect(520, 320, 1171, 131))
             self.error_label.setStyleSheet("font: 16pt \"Roboto\";\n"
                                            "color: rgb(255, 0, 0);")
             self.error_label.setObjectName("error_label")
