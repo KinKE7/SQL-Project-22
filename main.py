@@ -38,8 +38,10 @@ class SQLScreen(QDialog):
 
 class WelcomeScreen(QDialog):
     def __init__(self):
+        global cursor
         super(WelcomeScreen, self).__init__()
         loadUi('assets/ui/welcome-screen.ui', self)
+        cursor = bgfns.cursor_obj()
         self.login_button.clicked.connect(self.gotologin)
         self.new_acc_button.clicked.connect(self.gotocreate)
 
@@ -58,11 +60,8 @@ class WelcomeScreen(QDialog):
 
 class LoginScreen(QDialog):
     def __init__(self):
-        global con_obj, cur1
         super(LoginScreen, self).__init__()
         loadUi('assets/ui/login.ui', self)
-        con_obj = bgfns.connection()
-        cur1 = con_obj.cursor()
         self.password_line_edit.setEchoMode(QtWidgets.QLineEdit.Password)
         self.login_button.clicked.connect(self.login_function)
         self.sign_up_button.clicked.connect(WelcomeScreen.gotocreate)
@@ -71,22 +70,23 @@ class LoginScreen(QDialog):
         global username
         username = self.username_line_edit.text()  # Username entered by user
         password = self.password_line_edit.text()  # Password entered by user
+        self.error_label.setText('')
+        self.error_label_2.setText('')
         if len(username) == 0 or len(password) == 0:  # checks if all fields have been filled
             self.error_label.setText('Please input all fields')
         else:
             try:
-                userdata = bgfns.login(cur1, username)
+                userdata = bgfns.login(username)
                 matched_password = userdata[
                     1]  # Searches for username in SQL. If it doesn't exist then it goes to the except statement, if it does exist then matched password will become required password.
-                if matched_password == password and not userdata[
-                    2]:  # Verifies if required password (i.e, matched_password) matches with the password entered by user
+                if matched_password == password and not userdata[2]:  # Verifies if required password (i.e, matched_password) matches with the password entered by user
                     logging.info(f'{username} has successfully logged in.')
                     main_screen = MainScreen()
                     widget.addWidget(main_screen)
                     widget.setCurrentIndex(widget.currentIndex() + 1)
                 elif userdata[2]:
                     logging.info(f'Banned user {username} attempted log in.')
-                    self.error_label.setText("This account has been banned")
+                    self.error_label_2.setText("This account has been banned. Contact support@bookipedia.com to appeal your ban.")
                 else:
                     self.error_label.setText('Invalid username or password')
             except:
@@ -107,16 +107,17 @@ class CreateAccScreen(QDialog):
         username = self.username_line_edit.text()  # Username entered by user
         password = self.password_line_edit.text()  # Password entered by user
         confirm_password = self.confirm_password_line_edit.text()  # Password entered again by user
+        self.error_label.setText('')
         if len(username) == 0 or len(password) == 0 or len(
                 confirm_password) == 0:  # If all fields haven't been filled throw error
             self.error_label.setText("Please fill in all fields")
         elif password != confirm_password:  # If password does not match confirm password, throw error
             self.error_label.setText("Passwords do not match")
-        elif (bgfns.getuser(username, cur1)) and (
-                username in bgfns.getuser(username, cur1)):  # If username exists throw error
+        elif (bgfns.getuser(username)) and (
+                username in bgfns.getuser(username)):  # If username exists throw error
             self.error_label.setText("Username is already taken")
         else:  # Add username-password pair to database
-            bgfns.create_profile(username, password, cur1)
+            bgfns.create_profile(username, password)
             logging.info(f'New user {username} signed up.')
             WelcomeScreen().gotologin()
 
@@ -129,7 +130,11 @@ class MainScreen(QDialog):
             self.user_management.deleteLater()
             self.admin_shield.deleteLater()
         self.search_button.clicked.connect(self.search_function)
-        menu_button_redirector(self)
+        self.menu_home.clicked.connect(MainScreen.gotomenu)
+        self.menu_fav.clicked.connect(lambda: MainScreen.gotouserlists(0))
+        self.menu_my_read.clicked.connect(lambda: MainScreen.gotouserlists(1))
+        self.menu_read_list.clicked.connect(lambda: MainScreen.gotouserlists(2))
+        self.menu_sign_out.clicked.connect(WelcomeScreen.gotologin)
         self.user_management.clicked.connect(MainScreen.gotousermanagement)
 
     def search_function(self):  # Home page search function
@@ -147,8 +152,9 @@ class MainScreen(QDialog):
     def gotouserlists(num):  # Function to redirect users to My read/Favourites/Read list tab
         items = []
         QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
-        user_lists = [bgfns.liketoggle(cur1, username, False), bgfns.readtoggle(cur1, username, False),
-                      bgfns.wanttoggle(cur1, username, False)]
+        user_lists = [bgfns.list_toggle(username, False, '', 'LIKEBOOK'),
+                      bgfns.list_toggle(username, False, '', 'READBOOK'),
+                      bgfns.list_toggle(username, False, '', 'WANTBOOK')]
         for book_id in user_lists[num]:
             resp = requests.get(f"https://www.googleapis.com/books/v1/volumes/{book_id}").json()
             items = items + [resp]
@@ -169,12 +175,35 @@ class MainScreen(QDialog):
         widget.addWidget(main_screen)
         widget.setCurrentIndex(widget.currentIndex() + 1)
 
+    @staticmethod
+    def goback():
+        widget_name = widget.currentWidget().objectName()
+        if widget_name in ['expanded_book', 'user_management']:
+            while widget.currentWidget().objectName() == widget_name:
+                widget.removeWidget(widget.currentWidget())
+        elif widget.widget(widget.currentIndex() - 1).objectName() == 'search_screen':
+            global searchterm
+            search_list.pop()
+            searchterm = search_list[-1]
+            if len(searchterm):
+                logging.info(f"Searching for '{searchterm}'")
+                QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
+                response = requests.get(
+                    f"https://www.googleapis.com/books/v1/volumes?q={searchterm}&maxResults=40").json()
+                search_screen = SearchScreen(response, True)
+                widget.removeWidget(widget.currentWidget())
+                widget.removeWidget(widget.currentWidget())
+                widget.addWidget(search_screen)
+                widget.setCurrentIndex(widget.currentIndex() + 1)
+        else:
+            widget.removeWidget(widget.currentWidget())
+
 
 class UserManagement(QDialog):
     def __init__(self):
         super(UserManagement, self).__init__()
         loadUi('assets/ui/user-management.ui', self)
-        users_list = bgfns.banlist(cur1)
+        users_list = bgfns.banlist()
         users_list.sort(key=lambda x: x[1])  # First unbanned users and then banned
         i = 0
         for user in users_list:
@@ -220,23 +249,25 @@ class UserManagement(QDialog):
         if 'ban' in self.sender().objectName():
             user = self.sender().objectName().split('_', 1)
             if 'unban' in user[0]:
-                bgfns.ban(user[1], cur1, 0)
+                bgfns.ban(user[1], 0)
                 logging.info(f'Unbanned user {user[1]}')
             else:
-                bgfns.ban(user[1], cur1, 1)
+                bgfns.ban(user[1], 1)
                 logging.info(f'Banned user {user[1]}')
             MainScreen.gotousermanagement()
 
 
 class SearchScreen(QDialog):
     def __init__(self, response, search, list_num=0):
-        global thumbnail_list, title_list, authors_list, publisher_list, desc_list, lang_list, book_id_list
+        global thumbnail_list, title_list, authors_list, publisher_list, desc_list, lang_list, book_id_list, search_list
         super(SearchScreen, self).__init__()
-        user_lists = [bgfns.liketoggle(cur1, username, False), bgfns.readtoggle(cur1, username, False),
-                      bgfns.wanttoggle(cur1, username, False)]
+        user_lists = [bgfns.list_toggle(username, False, '', 'LIKEBOOK'),
+                      bgfns.list_toggle(username, False, '', 'READBOOK'),
+                      bgfns.list_toggle(username, False, '', 'WANTBOOK')]
         if search:
             loadUi('assets/ui/search-screen.ui', self)
             self.search_line_edit.setText(searchterm)
+            search_list = search_list + [searchterm]
             iter_no = 40
         else:
             loadUi('assets/ui/user-list-screen.ui', self)
@@ -285,6 +316,7 @@ class SearchScreen(QDialog):
                                              "font: 9pt \"MS Shell Dlg 2\";")
             self.plainTextEdit.setObjectName("plain_text_book_" + str(j + 1))
             self.plainTextEdit.setPlainText(QtCore.QCoreApplication.translate("Dialog", title))
+            self.plainTextEdit.setReadOnly(True)
             # Book redirect buttons
             self.button = QtWidgets.QPushButton(self.bgwidget)
             self.button.setGeometry(QtCore.QRect(100 + ((j % 5) * 200), 210 + ((j // 5) * 300), 128, 190))
@@ -327,6 +359,7 @@ class SearchScreen(QDialog):
         global searchterm
         searchterm = self.search_line_edit.text()
         if len(searchterm):
+            logging.info(f"Searching for '{searchterm}'")
             QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
             response = requests.get(f"https://www.googleapis.com/books/v1/volumes?q={searchterm}&maxResults=40").json()
             search_screen = SearchScreen(response, True)
@@ -338,7 +371,7 @@ class SearchScreen(QDialog):
             button_redirect = ButtonRedirect(int((self.sender().objectName())[12:]) - 1)
             widget.addWidget(button_redirect)
             widget.setCurrentIndex(widget.currentIndex() + 1)
-            bgfns.book_onclick(username, book_id_list[int((self.sender().objectName())[12:]) - 1], cur1)
+            bgfns.book_onclick(username, book_id_list[int((self.sender().objectName())[12:]) - 1])
         except:
             pass
 
@@ -346,8 +379,9 @@ class SearchScreen(QDialog):
     def gotouserlists(num):
         items = []
         QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
-        user_lists = [bgfns.liketoggle(cur1, username, False), bgfns.readtoggle(cur1, username, False),
-                      bgfns.wanttoggle(cur1, username, False)]
+        user_lists = [bgfns.list_toggle(username, False, '', 'LIKEBOOK'),
+                      bgfns.list_toggle(username, False, '', 'READBOOK'),
+                      bgfns.list_toggle(username, False, '', 'WANTBOOK')]
         for book_id in user_lists[num]:
             resp = requests.get(f"https://www.googleapis.com/books/v1/volumes/{book_id}").json()
             items = items + [resp]
@@ -391,10 +425,10 @@ class ButtonRedirect(QDialog):
         self.Comment_as_label.setText(f'Comment as {username}')
         try:  # Checks if comments for particular book exist else goes to except
             self.scrollAreaWidgetContents.setGeometry(QtCore.QRect(0, 0, 1198, 1100 + (
-                        170 * len(bgfns.insertcomment(cur1, book_id_list[button_num], False)))))
+                    170 * len(bgfns.insertcomment(book_id_list[button_num], False)))))
             self.bgwidget.setGeometry(QtCore.QRect(0, 0, 1198, 1100 + (
-                        170 * len(bgfns.insertcomment(cur1, book_id_list[button_num], False)))))
-            for i in range(len(bgfns.insertcomment(cur1, book_id_list[button_num], False))):
+                    170 * len(bgfns.insertcomment(book_id_list[button_num], False)))))
+            for i in range(len(bgfns.insertcomment(book_id_list[button_num], False))):
                 self.comment = QtWidgets.QPlainTextEdit(self.bgwidget)
                 self.comment.setGeometry(QtCore.QRect(170, 1140 + (150 * i), 931, 91))
                 self.comment.setStyleSheet("background-color: #00000000;\n"
@@ -414,11 +448,11 @@ class ButtonRedirect(QDialog):
                                             "font: 10pt \"MS Shell Dlg 2\";")
                 self.username.setObjectName(f"username_{i + 1}")
                 self.comment.setPlainText(
-                    _translate("Dialog", bgfns.insertcomment(cur1, book_id_list[button_num], False)[i][1]))
+                    _translate("Dialog", bgfns.insertcomment(book_id_list[button_num], False)[i][1]))
+                self.comment.setReadOnly(True)
                 self.username.setText(
-                    _translate("Dialog", bgfns.insertcomment(cur1, book_id_list[button_num], False)[i][0]))
-                if username in admin_list or username == bgfns.insertcomment(cur1, book_id_list[button_num], False)[i][
-                    0]:
+                    _translate("Dialog", bgfns.insertcomment(book_id_list[button_num], False)[i][0]))
+                if username in admin_list or username == bgfns.insertcomment(book_id_list[button_num], False)[i][0]:
                     self.remove_icon = QtWidgets.QLabel(self.bgwidget)
                     self.remove_icon.setGeometry(QtCore.QRect(740, 1110 + (150 * i), 20, 20))
                     self.remove_icon.setText("")
@@ -452,7 +486,7 @@ class ButtonRedirect(QDialog):
                         self.ban_button.setObjectName(f"ban_button_{i + 1}")
                         self.ban_button.setStyleSheet("background-color: #00000000;")
                         self.ban_button.setText("")
-                        if not bgfns.login(cur1, bgfns.insertcomment(cur1, book_id_list[button_num], False)[i][0])[2]:
+                        if not bgfns.login(bgfns.insertcomment(book_id_list[button_num], False)[i][0])[2]:
                             self.ban_text.setText(_translate("Dialog", "Ban User"))
                         else:
                             self.ban_text.setText(_translate("Dialog", "Unban User"))
@@ -462,7 +496,9 @@ class ButtonRedirect(QDialog):
 
         # Translation
         self.book_title.setPlainText(_translate("Dialog", title_list[button_num]))
+        self.book_title.setReadOnly(True)
         self.book_description.setPlainText(_translate("Dialog", desc_list[button_num]))
+        self.book_description.setReadOnly(True)
         self.book_publisher.setText(_translate("Dialog", "Publisher: " + publisher_list[button_num]))
         self.book_author.setText(_translate("Dialog", "Author: " + authors_list[button_num]))
         self.book_language.setText(_translate("Dialog", "Language: " + lang_list[button_num]))
@@ -475,79 +511,43 @@ class ButtonRedirect(QDialog):
                                'color: rgb(255, 255, 255);' \
                                'border: 1px solid rgb(238, 2, 73);' \
                                'background-color: rgb(238, 2, 73);'
-        if book_id_list[button_num] in bgfns.liketoggle(cur1, username, False):
+        if book_id_list[button_num] in bgfns.list_toggle(username, False, '', 'LIKEBOOK'):
             self.fav_button.setStyleSheet(button_clicked_style)
-        if book_id_list[button_num] in bgfns.readtoggle(cur1, username, False):
+        if book_id_list[button_num] in bgfns.list_toggle(username, False, '', 'READBOOK'):
             self.my_read_button.setStyleSheet(button_clicked_style)
-        if book_id_list[button_num] in bgfns.wanttoggle(cur1, username, False):
+        if book_id_list[button_num] in bgfns.list_toggle(username, False, '', 'WANTBOOK'):
             self.read_list_button.setStyleSheet(button_clicked_style)
         # Menu
         menu_button_redirector(self)
-        self.back_icon_button.clicked.connect(self.goback)
-        self.fav_button.clicked.connect(lambda: self.edit_fav_list(button_num))
-        self.my_read_button.clicked.connect(lambda: self.edit_my_read_list(button_num))
-        self.read_list_button.clicked.connect(lambda: self.edit_read_list(button_num))
+        self.fav_button.clicked.connect(lambda: self.change_toggle(button_num, 'LIKEBOOK'))
+        self.my_read_button.clicked.connect(lambda: self.change_toggle(button_num, 'READBOOK'))
+        self.read_list_button.clicked.connect(lambda: self.change_toggle(button_num, 'WANTBOOK'))
         self.comment_submit_button.clicked.connect(lambda: self.add_comment(button_num))
         for button in self.bgwidget.findChildren(QtWidgets.QPushButton):
             button.clicked.connect(partial(lambda: self.check_clicked(button_num)))
 
-    @staticmethod
-    def goback():
-        while widget.currentWidget().objectName() == 'expanded_book':
-            widget.removeWidget(widget.currentWidget())
-
-    def edit_fav_list(self, num):
-        if book_id_list[num] in bgfns.liketoggle(cur1, username, False):
-            bgfns.liketoggle(cur1, username, True, book_id_list[num])
-            self.fav_button.setStyleSheet('border-radius: 5px;'
-                                          'font: 14pt "MS Shell Dlg 2";'
-                                          'color: rgb(255, 255, 255);'
-                                          'border: 1px solid rgb(238, 2, 73);')
+    def change_toggle(self, num, toggle_type):
+        if book_id_list[num] in bgfns.list_toggle(username, False, '', toggle_type):
+            bgfns.list_toggle(username, True, book_id_list[num], toggle_type)
+            self.sender().setStyleSheet('border-radius: 5px;'
+                                        'font: 14pt "MS Shell Dlg 2";'
+                                        'color: rgb(255, 255, 255);'
+                                        'border: 1px solid rgb(238, 2, 73);')
         else:
-            bgfns.liketoggle(cur1, username, True, book_id_list[num])
-            self.fav_button.setStyleSheet('border-radius: 5px;'
-                                          'font: 14pt "MS Shell Dlg 2";'
-                                          'color: rgb(255, 255, 255);'
-                                          'border: 1px solid rgb(238, 2, 73);'
-                                          'background-color: rgb(238, 2, 73);')
-
-    def edit_read_list(self, num):
-        if book_id_list[num] in bgfns.wanttoggle(cur1, username, False):
-            bgfns.wanttoggle(cur1, username, True, book_id_list[num])
-            self.read_list_button.setStyleSheet('border-radius: 5px;'
-                                                'font: 14pt "MS Shell Dlg 2";'
-                                                'color: rgb(255, 255, 255);'
-                                                'border: 1px solid rgb(238, 2, 73);')
-            logging.info(f"Book '{title_list[num]}' removed from read later")
-        else:
-            bgfns.wanttoggle(cur1, username, True, book_id_list[num])
-            self.read_list_button.setStyleSheet('border-radius: 5px;'
-                                                'font: 14pt "MS Shell Dlg 2";'
-                                                'color: rgb(255, 255, 255);'
-                                                'border: 1px solid rgb(238, 2, 73);'
-                                                'background-color: rgb(238, 2, 73);')
-
-    def edit_my_read_list(self, num):
-        if book_id_list[num] in bgfns.readtoggle(cur1, username, False):
-            bgfns.readtoggle(cur1, username, True, book_id_list[num])
-            self.my_read_button.setStyleSheet('border-radius: 5px;'
-                                              'font: 14pt "MS Shell Dlg 2";'
-                                              'color: rgb(255, 255, 255);'
-                                              'border: 1px solid rgb(238, 2, 73);')
-        else:
-            bgfns.readtoggle(cur1, username, True, book_id_list[num])
-            self.my_read_button.setStyleSheet('border-radius: 5px;'
-                                              'font: 14pt "MS Shell Dlg 2";'
-                                              'color: rgb(255, 255, 255);'
-                                              'border: 1px solid rgb(238, 2, 73);'
-                                              'background-color: rgb(238, 2, 73);')
+            bgfns.list_toggle(username, True, book_id_list[num], toggle_type)
+            self.sender().setStyleSheet('border-radius: 5px;'
+                                        'font: 14pt "MS Shell Dlg 2";'
+                                        'color: rgb(255, 255, 255);'
+                                        'border: 1px solid rgb(238, 2, 73);'
+                                        'background-color: rgb(238, 2, 73);')
 
     @staticmethod
     def gotouserlists(num):
         items = []
         QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
-        user_lists = [bgfns.liketoggle(cur1, username, False), bgfns.readtoggle(cur1, username, False),
-                      bgfns.wanttoggle(cur1, username, False)]
+        user_lists = [bgfns.list_toggle(username, False, '', 'LIKEBOOK'),
+                      bgfns.list_toggle(username, False, '', 'READBOOK'),
+                      bgfns.list_toggle(username, False, '', 'WANTBOOK')]
         for book_id in user_lists[num]:
             resp = requests.get(f"https://www.googleapis.com/books/v1/volumes/{book_id}").json()
             items = items + [resp]
@@ -558,7 +558,7 @@ class ButtonRedirect(QDialog):
 
     def add_comment(self, num):
         comment = self.comment_input_text_edit.toPlainText()  # Gets comment from user and stores it into the 'comment' var
-        bgfns.insertcomment(cur1, book_id_list[num], True, username, comment)
+        bgfns.insertcomment(book_id_list[num], True, username, comment)
         logging.info(f'New comment posted by {username}')
         widget.addWidget(ButtonRedirect(num))
         widget.setCurrentIndex(widget.currentIndex() + 1)
@@ -566,20 +566,22 @@ class ButtonRedirect(QDialog):
     def check_clicked(self, button_num):
         button = ["".join(x) for _, x in groupby(self.sender().objectName(), key=str.isdigit)]
         if 'remove_button_' in button:
-            comments_list = bgfns.insertcomment(cur1, book_id_list[button_num], False)
-            bgfns.insertcomment(cur1, book_id_list[button_num], True, comments_list[int(button[1]) - 1][0], '')
+            comments_list = bgfns.insertcomment(book_id_list[button_num], False)
+            bgfns.insertcomment(book_id_list[button_num], True, comments_list[int(button[1]) - 1][0], '')
             logging.info(f"{comments_list[int(button[1]) - 1][0]}'s comment was removed by {username}")
             widget.addWidget(ButtonRedirect(button_num))
             widget.setCurrentIndex(widget.currentIndex() + 1)
         elif 'ban_button_' in button:
-            comments_list = bgfns.insertcomment(cur1, book_id_list[button_num], False)
+            comments_list = bgfns.insertcomment(book_id_list[button_num], False)
             _translate = QtCore.QCoreApplication.translate
-            if bgfns.login(cur1, bgfns.insertcomment(cur1, book_id_list[button_num], False)[int(button[1]) - 1][0])[2]:
-                bgfns.ban(comments_list[int(button[1]) - 1][0], cur1, 0)
-                logging.info(f'Unbanned user {bgfns.insertcomment(cur1, book_id_list[button_num], False)[int(button[1]) - 1][0]}')
+            if bgfns.login(bgfns.insertcomment(book_id_list[button_num], False)[int(button[1]) - 1][0])[2]:
+                bgfns.ban(comments_list[int(button[1]) - 1][0], 0)
+                logging.info(
+                    f'Unbanned user {bgfns.insertcomment(book_id_list[button_num], False)[int(button[1]) - 1][0]}')
             else:
-                bgfns.ban(comments_list[int(button[1]) - 1][0], cur1, 1)
-                logging.info(f'Banned user {bgfns.insertcomment(cur1, book_id_list[button_num], False)[int(button[1]) - 1][0]}')
+                bgfns.ban(comments_list[int(button[1]) - 1][0], 1)
+                logging.info(
+                    f'Banned user {bgfns.insertcomment(book_id_list[button_num], False)[int(button[1]) - 1][0]}')
             widget.addWidget(ButtonRedirect(button_num))
             widget.setCurrentIndex(widget.currentIndex() + 1)
 
@@ -590,11 +592,12 @@ def menu_button_redirector(self):
     self.menu_my_read.clicked.connect(lambda: MainScreen.gotouserlists(1))
     self.menu_read_list.clicked.connect(lambda: MainScreen.gotouserlists(2))
     self.menu_sign_out.clicked.connect(WelcomeScreen.gotologin)
+    self.back_icon_button.clicked.connect(MainScreen.goback)
 
 
-thumbnail_list = title_list = authors_list = publisher_list = desc_list = lang_list = book_id_list = []
+thumbnail_list = title_list = authors_list = publisher_list = desc_list = lang_list = book_id_list = search_list = []
 admin_list = ['root']
-username = searchterm = con_obj = cur1 = ''
+username = searchterm = ''
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     if os.path.isfile('creds.bin'):
