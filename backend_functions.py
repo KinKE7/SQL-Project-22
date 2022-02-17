@@ -10,25 +10,22 @@ def initialise_sql(host, user, password):  # password storage for user's root lo
     with open('creds.bin', 'wb') as f:
         binwriter.dump({'host': host, 'user': user, 'password': password}, f)
     cur = mycon.cursor()
-    try:
-        cur.execute("drop database bookipedia")
-    except:
-        pass
-    cur.execute('create database bookipedia')
-    cur.execute('use bookipedia')
-    cur.execute('''create table registry(
-    name varchar(20) not null,
-    password varchar(20) not null,
-    bancheck bit(1) default b'0');''')
-    cur.execute('''create table regdata(
-    name varchar(20) not null,
-    book varchar(60),
-    readbook bit(1) default b'0',
-    likebook bit(1) default b'0',
-    wantbook bit(1) default b'0',
-    comments varchar(200));''')
-    cur.execute('insert into registry VALUES("root","pass", 0);')
-    cur.execute("commit;")
+    cur.execute("DROP DATABASE IF EXISTS BOOKIPEDIA")
+    cur.execute('CREATE DATABASE BOOKIPEDIA')
+    cur.execute('USE BOOKIPEDIA')
+    cur.execute("CREATE TABLE REGISTRY("
+                "name VARCHAR(20) NOT NULL, "
+                "password VARCHAR(20) NOT NULL, "
+                "bancheck BIT(1) DEFAULT b'0');")
+    cur.execute('create table regdata('
+                'name varchar(20) not null, '
+                'book varchar(60), '
+                "readbook bit(1) default b'0', "
+                "likebook bit(1) default b'0', "
+                "wantbook bit(1) default b'0', "
+                'comments varchar(200));')
+    cur.execute('INSERT INTO REGISTRY VALUES("root","pass", 0);')
+    mycon.commit()
     return True
 
 
@@ -43,158 +40,90 @@ def connection():
         return mycon
 
 
-def create_profile(uname, pwd, xursor):  # xursor : connection object init from main.py
-    xursor.execute('insert into registry VALUES("%s","%s",0);' % (uname, pwd))
-    xursor.execute("commit;")
+def cursor_obj():
+    global con_obj, cursor
+    con_obj = connection()
+    con_obj.autocommit = True
+    cursor = con_obj.cursor()
+    return cursor
 
 
-def getuser(name, cur):
-    cur.execute("SELECT name FROM registry where name = '%s';" % name)
-    d = cur.fetchone()
-    return d
+def create_profile(uname, pwd):
+    cursor.execute(f'INSERT INTO REGISTRY VALUES("{uname}", "{pwd}",0);')
 
 
-# need to create an admin profile interface that only shows the book readers (No books, only list of names and options to perform  admin functions)
+def getuser(name):
+    cursor.execute(f"SELECT name FROM REGISTRY where name='{name}';")
+    return cursor.fetchone()
+
 
 def delete_profile(name):
-    myc = connection()
-    admin_cur = myc.connection()
-    admin_cur.execute("use BookiPedia")
-    admin_cur.execute('delete from regdata where name = "%s";' % name)
-    admin_cur.execute('delete from registry where name = "%s";' % name)
-    admin_cur.execute('commit;')
+    cursor.execute(f'DELETE FROM REGDATE WHERE name="{name}";')
+    cursor.execute(f'DELETE FROM REGISTRY WHERE name="{name}";')
 
 
-# Password change function for login (only admin access) (need to create)
-
-def login(xursor, uname):
-    xursor.execute("use BookiPedia")
-    xursor.execute('select * from registry where name = "%s";' % (
-        uname))  # might have to change the database name later to a password manager later
-    u_query = xursor.fetchone()  # gives tuple : [0] = name, [1] = password , if not found returns NoneType
-    if u_query is None:
+def login(uname):
+    cursor.execute("USE BOOKIPEDIA")
+    cursor.execute(f'SELECT * FROM REGISTRY WHERE name="{uname}";')  # might have to change the database name later to a password manager later
+    u_query = cursor.fetchone()  # gives tuple : [0] = name, [1] = password , if not found returns NoneType
+    if not u_query:
         return ['', '']
     return u_query
 
 
-# ------------------------------------------------------------------------------------------------------------------------------
-
-# CONDITIONAL FUNCTION WE NEEED TO EXTRACT THE USERNAME AND BOOKNAME TO PROVIDE THE INPUT FOR
-# legend:
-# 0 - tempbook (deleted on exiting the application)
-# 1 - set book as liked
-# 2 - set book as read
-# 3 - set book as want to read
-# ------------------------------------------------------------------------------------------------------------------------------
-def tempbook(cur, uname, bookid=''):
-    cur.execute('insert into regdata (name,book) values("%s","%s");' % (uname, bookid))
-    cur.execute('commit;')
+def tempbook(uname, bookid=''):
+    cursor.execute(f'INSERT INTO REGDATA (name,book) VALUES("{uname}", "{bookid}");')
 
 
-def liketoggle(cur, uname, condn=True, bookid=''):
+def list_toggle(uname, condn=True, bookid='', toggle_type=''):
     if condn:
-        cur.execute('select likebook from regdata where name = "%s" and book = "%s";' % (uname, bookid))
-        likebool = cur.fetchone()[0]
-        if not likebool:
-            likebool = 1
-        else:
-            likebool = 0
-        cur.execute('update regdata SET likebook = %s where name = "%s" and book="%s";' % (likebool, uname, bookid))
-        cur.execute('commit;')
+        cursor.execute(f'SELECT {toggle_type} FROM REGDATA WHERE name="{uname}" AND book="{bookid}";')
+        boolean = int(not cursor.fetchone()[0])
+        cursor.execute(f'UPDATE REGDATA SET {toggle_type}={boolean} WHERE name="{uname}" AND book="{bookid}";')
     else:
-        cur.execute('select book from regdata where likebook = 1 and name = "%s";' % uname)
-        returnlist = cur.fetchall()
+        cursor.execute(f'SELECT BOOK FROM REGDATA WHERE {toggle_type}=1 AND name="{uname}";')
+        returnlist = cursor.fetchall()
         if bool(returnlist):
             return list(i[0] for i in returnlist)
         else:
             return []
 
 
-def readtoggle(cur, uname, condn=True, bookid=''):
+def insertcomment(bookid, condn=True, uname='', comment=''):
     if condn:
-        cur.execute('select readbook from regdata where name = "%s" and book = "%s";' % (uname, bookid))
-        readbool = cur.fetchone()[0]
-        if not readbool:
-            readbool = 1
-        else:
-            readbool = 0
-        cur.execute('update regdata SET readbook = %s where name = "%s" and book="%s";' % (readbool, uname, bookid))
-        cur.execute('commit;')
+        cursor.execute(f'UPDATE REGDATA SET comments="{comment}" WHERE name="{uname}" AND book="{bookid}";')
     else:
-        cur.execute('select book from regdata where readbook = 1 and name = "%s";' % uname)
-        returnlist = cur.fetchall()
-        if bool(returnlist):
-            return list(i[0] for i in returnlist)
+        cursor.execute(f'SELECT name,comments FROM REGDATA WHERE book="{bookid}"')
+        comments_tuple = []
+        for tup in cursor.fetchall():
+            if bool(tup[1]):
+                comments_tuple += [tup]
+        return comments_tuple
+
+
+def book_onclick(name, book):
+    cursor.execute(f"SELECT name,book FROM REGDATA WHERE name='{name}' AND book='{book}';")
+    if not cursor.fetchone():
+        cursor.execute(f"INSERT INTO REGDATA VALUES('{name}','{book}',0,0,0,'');")
+
+
+def banlist():
+    cursor.execute("SELECT name,bancheck FROM REGISTRY WHERE NOT name='root';")
+    ban_list = cursor.fetchall()
+    for i in range(len(ban_list)):
+        if ban_list[i][1] == 0:
+            ban_list[i] = (ban_list[i][0], False)
         else:
-            return []
+            ban_list[i] = (ban_list[i][0], True)
+    return ban_list
 
 
-def wanttoggle(cur, uname, condn=True, bookid=''):
-    if condn:
-        cur.execute('select wantbook from regdata where name = "%s" and book = "%s";' % (uname, bookid))
-        try:
-            wantbool = cur.fetchone()[0]
-        except TypeError:
-            wantbool = 0
-        if not wantbool:
-            wantbool = 1
-        else:
-            wantbool = 0
-        cur.execute('update regdata SET wantbook = %s where name = "%s" and book="%s";' % (wantbool, uname, bookid))
-        cur.execute('commit;')
-    else:
-        cur.execute('select book from regdata where wantbook = 1 and name = "%s";' % uname)
-        returnlist = cur.fetchall()
-        if bool(returnlist):
-            return list(i[0] for i in returnlist)
-        else:
-            return []
+def ban(uname, banbool=1):
+    cursor.execute(f"update registry set bancheck={banbool} where name = '{uname}';")
 
 
-def insertcomment(cur, bookid, condn=True, uname='', comment=''):
-    if condn:
-        cur.execute('update regdata set comments = "%s" where name = "%s" and book = "%s";' % (comment, uname, bookid))
-        cur.execute('commit;')
-    else:
-        cur.execute('select name,comments from regdata where book = "%s"' % bookid)
-        d = cur.fetchall()
-        q = []
-        for i in d:
-            if bool(i[1]):
-                q += [i]
-        return q
-
-
-def book_onclick(name, book, cur):
-    cur.execute("select name,book from regdata where name = '%s' and book = '%s';" % (name, book))
-    g = cur.fetchone()
-    if g is None:
-        cur.execute("insert  into regdata values('%s','%s',0,0,0,'');" % (name, book))
-        cur.execute('commit;')
-
-
-def banlist(cur):
-    cur.execute("select name,bancheck from registry where not name='root';")
-    d = cur.fetchall()
-    for i in range(len(d)):
-        if d[i][1] == 0:
-            d[i] = (d[i][0], False)
-        else:
-            d[i] = (d[i][0], True)
-    return d
-
-
-def ban(uname, cur, banbool=1):
-    cur.execute("update registry set bancheck = %s where name = '%s';" % (banbool, uname))
-    cur.execute('commit;')
-
-
-# ------------------------------------------------------------------------------------------------------------------------------
-# at end of every session, remove all books which are still not favourited/read/want to read... those books will not exist for the user's sql table
-# ------------------------------------------------------------------------------------------------------------------------------
 def eradicate():
-    myc = connection()
-    admin_cur = myc.cursor()
-    admin_cur.execute("use BookiPedia")
-    admin_cur.execute("delete from regdata where readbook + likebook + wantbook = 0 and comments = '';")
-    admin_cur.execute('commit;')
+    try:
+        cursor.execute("DELETE FROM REGDATA WHERE readbook + likebook + wantbook = 0 AND comments='';")
+    except AttributeError:
+        pass
